@@ -45,7 +45,7 @@ class VirtualFileSystem(
       )
 
   private def isClassifiedPath(resolved: Path): Boolean =
-    normalizedClassified.exists(cp => resolved.startsWith(cp) || resolved == cp)
+    normalizedClassified.exists(cp => resolved.startsWith(cp))
 
   private def requireNotClassified(resolved: Path, op: String): Unit =
     if isClassifiedPath(resolved) then
@@ -85,13 +85,14 @@ class VirtualFileSystem(
       val raw = files.getOrElse(resolved, throw java.nio.file.NoSuchFileException(resolved.toString))
       val content = String(raw)
       val reader = BufferedReader(StringReader(content))
-      val lines = ListBuffer[String]()
-      var line: String | Null = reader.readLine()
-      while line != null do
-        lines += line
-        line = reader.readLine()
-      reader.close()
-      lines.toList
+      try
+        val lines = ListBuffer[String]()
+        var line: String | Null = reader.readLine()
+        while line != null do
+          lines += line
+          line = reader.readLine()
+        lines.toList
+      finally reader.close()
 
     def delete(): Unit =
       requireNotClassified(resolved, "delete")

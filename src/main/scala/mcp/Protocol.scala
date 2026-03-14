@@ -82,10 +82,11 @@ object InitializeParams:
 case class InitializeResult(
     protocolVersion: String,
     capabilities: ServerCapabilities,
-    serverInfo: ServerInfo
+    serverInfo: ServerInfo,
+    instructions: Option[String] = None
 )
 object InitializeResult:
-  given Encoder[InitializeResult] = deriveEncoder
+  given Encoder[InitializeResult] = deriveEncoder[InitializeResult].mapJson(_.dropNullValues)
 
 case class Tool(
     name: String,

@@ -30,7 +30,8 @@ object Tools:
       description = Some("Create a new Scala REPL session. Returns a session ID that can be used for subsequent executions."),
       inputSchema = Json.obj(
         "type" -> "object".asJson,
-        "properties" -> Json.obj()
+        "properties" -> Json.obj(),
+        "additionalProperties" -> false.asJson
       )
     ),
     Tool(
@@ -70,7 +71,8 @@ object Tools:
       description = Some("List all active REPL session IDs."),
       inputSchema = Json.obj(
         "type" -> "object".asJson,
-        "properties" -> Json.obj()
+        "properties" -> Json.obj(),
+        "additionalProperties" -> false.asJson
       )
     ),
     Tool(
@@ -78,7 +80,8 @@ object Tools:
       description = Some("Show the full capability-scoped API available in the REPL. Call this first to understand what methods you can use. You must only use the provided interface to interact with the system."),
       inputSchema = Json.obj(
         "type" -> "object".asJson,
-        "properties" -> Json.obj()
+        "properties" -> Json.obj(),
+        "additionalProperties" -> false.asJson
       )
     )
   )

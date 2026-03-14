@@ -4,6 +4,8 @@ import tacit.core.{Context, Config}
 class ScalaExecutorSuite extends munit.FunSuite:
   given Context = Context(Config(), None)
 
+  // ── Basic execution ────────────────────────────────────────────────
+
   test("execute simple expression"):
     val result = ScalaExecutor.execute("1 + 1")
     assert(result.success)
@@ -47,6 +49,8 @@ class ScalaExecutorSuite extends munit.FunSuite:
     assert(result.success)
     assert(result.output.contains("List(1, 2)"))
 
+  // ── Validation ──────────────────────────────────────────────────
+
   test("reject java.io.File"):
     val result = ScalaExecutor.execute("""
       import java.io.File
@@ -80,3 +84,75 @@ class ScalaExecutorSuite extends munit.FunSuite:
     """)
     assert(!result.success)
     assert(result.error.exists(_.contains("file-io-scala")))
+
+  // ── Error handling and edge cases ────────────────────────────────
+
+  test("runtime exception is caught and reported"):
+    val result = ScalaExecutor.execute("""throw new RuntimeException("boom")""")
+    assert(!result.success || result.output.contains("RuntimeException") || result.error.isDefined)
+
+  test("empty code does not crash"):
+    val result = ScalaExecutor.execute("")
+    // Should not throw; success with empty or minimal output
+    assert(result != null)
+
+  test("whitespace-only code does not crash"):
+    val result = ScalaExecutor.execute("   \n\n  ")
+    assert(result != null)
+
+  // ── Language features ───────────────────────────────────────────
+
+  test("multiline code with class definition"):
+    val result = ScalaExecutor.execute("""
+      case class Point(x: Int, y: Int):
+        def distTo(other: Point): Double =
+          math.sqrt(math.pow(x - other.x, 2) + math.pow(y - other.y, 2))
+      Point(0, 0).distTo(Point(3, 4))
+    """)
+    assert(result.success, s"execution failed: ${result.error.getOrElse(result.output)}")
+    assert(result.output.contains("5.0"))
+
+  test("code with type error returns success=false"):
+    val result = ScalaExecutor.execute("""val x: Int = "hello"""")
+    assert(!result.success)
+
+  test("code producing large output completes"):
+    val result = ScalaExecutor.execute("(1 to 500).toList")
+    assert(result.success)
+    assert(result.output.contains("List(1, 2, 3"))
+
+  test("pattern matching expression"):
+    val result = ScalaExecutor.execute("""
+      val x: Any = 42
+      x match
+        case i: Int => s"int: $i"
+        case s: String => s"str: $s"
+        case _ => "other"
+    """)
+    assert(result.success)
+    assert(result.output.contains("int: 42"))
+
+  test("higher-order functions"):
+    val result = ScalaExecutor.execute("""
+      List(1, 2, 3, 4, 5).filter(_ % 2 == 0).map(_ * 10)
+    """)
+    assert(result.success)
+    assert(result.output.contains("List(20, 40)"))
+
+  // ── Configuration ───────────────────────────────────────────────
+
+  test("unwrapped mode executes code directly"):
+    given Context = Context(Config(wrappedCode = false), None)
+    val result = ScalaExecutor.execute("val unwrapped = 99\nunwrapped")
+    assert(result.success)
+    assert(result.output.contains("99"))
+
+  test("for comprehension"):
+    val result = ScalaExecutor.execute("""
+      for
+        x <- List(1, 2, 3)
+        y <- List(10, 20)
+      yield x * y
+    """)
+    assert(result.success)
+    assert(result.output.contains("List(10, 20, 20, 40, 30, 60)"))

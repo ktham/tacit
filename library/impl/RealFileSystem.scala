@@ -11,11 +11,34 @@ class RealFileSystem(
   check: String -> Boolean = _ => true,
   classifiedPaths: Set[Path] = Set.empty
 ) extends FileSystem:
-  private val normalizedRoot = root.toAbsolutePath.normalize
-  private val normalizedClassified = classifiedPaths.map(_.toAbsolutePath.normalize)
+  // Resolve symlinks in the root so that comparisons work correctly
+  // (e.g. on macOS where /tmp -> /private/tmp)
+  private val normalizedRoot =
+    val abs = root.toAbsolutePath.normalize
+    if Files.exists(abs) then abs.toRealPath() else abs
+  private val normalizedClassified = classifiedPaths.map: cp =>
+    val abs = cp.toAbsolutePath.normalize
+    if Files.exists(abs) then abs.toRealPath() else abs
 
+  /** Resolves symlinks in a path. For existing paths, uses toRealPath().
+    * For non-existing paths, resolves the nearest existing ancestor and
+    * appends the remaining segments, so that symlinks in parent directories
+    * are still resolved (e.g. /tmp -> /private/tmp on macOS).
+    */
+  private def resolveReal(absPath: Path): Path =
+    if Files.exists(absPath) then absPath.toRealPath()
+    else
+      val parent = absPath.getParent
+      if parent != null && parent != absPath then
+        resolveReal(parent).resolve(absPath.getFileName)
+      else absPath
+
+  /** Resolves and validates that a path is within the allowed root.
+    * Follows symlinks to prevent symlink-based escape attacks.
+    */
   private def resolvePath(target: String): Path =
-    val resolved = Paths.get(target).toAbsolutePath.normalize
+    val absPath = Paths.get(target).toAbsolutePath.normalize
+    val resolved = resolveReal(absPath)
     if !resolved.startsWith(normalizedRoot) then
       throw SecurityException(
         s"Access denied: $resolved is outside root $normalizedRoot"
@@ -29,8 +52,9 @@ class RealFileSystem(
         s"Access denied: path '$relativePath' did not pass the check"
       )
 
+  // startsWith returns true when resolved == cp, so the equality check is redundant
   private def isClassifiedPath(resolved: Path): Boolean =
-    normalizedClassified.exists(cp => resolved.startsWith(cp) || resolved == cp)
+    normalizedClassified.exists(cp => resolved.startsWith(cp))
 
   private def requireNotClassified(jpath: Path, op: String): Unit =
     if isClassifiedPath(jpath) then

@@ -88,6 +88,13 @@ lazy val root = project
       Seq(dst)
     }.taskValue,
 
+    // Generate version.properties so the server can read its own version at runtime
+    Compile / resourceGenerators += Def.task {
+      val dst = (Compile / resourceManaged).value / "version.properties"
+      IO.write(dst, s"version=${version.value}\nname=${name.value}\n")
+      Seq(dst)
+    }.taskValue,
+
     // Build library fat JAR before tests/run/assembly and pass its path
     Test / test := ((Test / test) dependsOn (lib / assembly)).value,
     Test / testOnly := ((Test / testOnly) dependsOn (lib / assembly)).evaluated,

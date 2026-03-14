@@ -75,7 +75,7 @@ class ProcessPermission(
 ) extends caps.SharedCapability
 
 /** Capability gating access to standard output (`println`, `print`, `printf`).
- *  An implciit instance is available at the REPL top level. */
+ *  An implicit instance is available at the REPL top level. */
 class IOCapability private extends caps.SharedCapability
 
 // ─── Interface ──────────────────────────────────────────────────────────────

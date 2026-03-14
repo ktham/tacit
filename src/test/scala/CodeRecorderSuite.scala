@@ -17,6 +17,8 @@ class CodeRecorderSuite extends munit.FunSuite:
   private def resultFiles(dir: File): Array[File] =
     dir.listFiles().filter(_.getName.endsWith(".result")).sortBy(_.getName)
 
+  // ── Basic recording ─────────────────────────────────────────────
+
   test("creates directory and writes files"):
     withTempDir("creates") { parent =>
       val dir = File(parent, "logs")
@@ -83,4 +85,66 @@ class CodeRecorderSuite extends munit.FunSuite:
       val resultContents = results.map(f => scala.io.Source.fromFile(f).mkString)
       assert(resultContents.exists(_.contains("out1")))
       assert(resultContents.exists(_.contains("out2")))
+    }
+
+  // ── Edge cases ──────────────────────────────────────────────────
+
+  test("recording empty code"):
+    withTempDir("empty-code") { dir =>
+      val recorder = CodeRecorder(dir)
+      recorder.record("", "s1", ExecutionResult(true, ""))
+      recorder.close()
+
+      val codes = scalaFiles(dir)
+      assertEquals(codes.length, 1)
+      val content = scala.io.Source.fromFile(codes.head).mkString
+      assertEquals(content, "")
+    }
+
+  test("recording code with unicode characters"):
+    withTempDir("unicode") { dir =>
+      val recorder = CodeRecorder(dir)
+      val code = "val π = 3.14159"
+      recorder.record(code, "s1", ExecutionResult(true, "val π: Double = 3.14159"))
+      recorder.close()
+
+      val content = scala.io.Source.fromFile(scalaFiles(dir).head).mkString
+      assertEquals(content, code)
+    }
+
+  test("recording result with both output and error"):
+    withTempDir("output-and-error") { dir =>
+      val recorder = CodeRecorder(dir)
+      recorder.record("bad code", "s1", ExecutionResult(false, "partial output", Some("RuntimeException: boom")))
+      recorder.close()
+
+      val content = scala.io.Source.fromFile(resultFiles(dir).head).mkString
+      assert(content.contains("status: failure"))
+      assert(content.contains("partial output"))
+      assert(content.contains("Error: RuntimeException: boom"))
+    }
+
+  test("rapid sequential recordings produce unique files"):
+    withTempDir("rapid") { dir =>
+      val recorder = CodeRecorder(dir)
+      (1 to 10).foreach { i =>
+        recorder.record(s"code $i", "s1", ExecutionResult(true, s"out $i"))
+      }
+      recorder.close()
+
+      assertEquals(scalaFiles(dir).length, 10)
+      assertEquals(resultFiles(dir).length, 10)
+      // Verify all files have unique names
+      val names = scalaFiles(dir).map(_.getName).toSet
+      assertEquals(names.size, 10)
+    }
+
+  test("recording result with empty output and no error"):
+    withTempDir("empty-output") { dir =>
+      val recorder = CodeRecorder(dir)
+      recorder.record("val x = 1", "s1", ExecutionResult(true, ""))
+      recorder.close()
+
+      val content = scala.io.Source.fromFile(resultFiles(dir).head).mkString
+      assert(content.contains("status: success"))
     }

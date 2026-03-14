@@ -1,7 +1,7 @@
 package tacit
 package executor
 
-import scala.collection.mutable
+import scala.collection.concurrent.TrieMap
 import java.io.{ByteArrayOutputStream, PrintStream}
 import java.util.UUID
 import dotty.tools.repl.{ReplDriver, State}
@@ -32,10 +32,8 @@ object ScalaExecutor:
       "-feature",
       "-unchecked",
       "-Yexplicit-nulls",
-      // "-Yno-predef",
       "-Wsafe-init",
       "-language:experimental.captureChecking",
-      // "-language:experimental.separationChecking",
       "-language:experimental.modularity"
     )
 
@@ -61,6 +59,9 @@ object ScalaExecutor:
     val llmConfigExpr = cfg.llmConfig match
       case None => "None"
       case Some(llm) => s"""Some(LlmConfig("${esc(llm.baseUrl)}", "${esc(llm.apiKey)}", "${esc(llm.model)}"))"""
+    // IOCapability's private constructor means user code cannot create one.
+    // The null sentinel is safe: IOCapability is only used as a type-level
+    // capability witness, never dereferenced at runtime.
     s"""|import tacit.library.*
         |val api: Interface = new InterfaceImpl(
         |  (root, check, classified) => new RealFileSystem(java.nio.file.Path.of(root), check, classified),
@@ -68,16 +69,14 @@ object ScalaExecutor:
         |  $classifiedExpr,
         |  $llmConfigExpr
         |)
-        |// import Predef.{print => _, println => _, printf => _, readLine => _, readInt => _, readDouble => _}
         |import api.*
         |given IOCapability = null.asInstanceOf[IOCapability]
         |""".stripMargin
 
   /** Wraps user code in a `def run() = ...; run()` block to avoid capture checking REPL errors. */
-  private[executor]  def wrapCode(code: String, wrap: Boolean): String =
+  private[executor] def wrapCode(code: String, wrap: Boolean): String =
     if !wrap then code
     else
-      // val whitespace = code.takeWhile(_.isWhitespace)
       val indented = code.linesIterator.map(line => s"  $line").mkString("\n")
       s"def run()(using IOCapability): Any =\n$indented\nrun()"
 
@@ -87,6 +86,11 @@ object ScalaExecutor:
       ExecutionResult(false, "", Some(CodeValidator.formatErrors(violations)))
     )
 
+  /** Global lock for System.out/err redirection. The REPL compiler writes to
+    * System.out/err directly, so only one execution can capture at a time.
+    */
+  private val outputCaptureLock = new Object
+
   /** Redirects stdout/stderr to the given print stream, runs the block, and captures output.
     * Detects Scala 3 compilation errors in the output (lines starting with `-- [E`)
     * and sets success=false accordingly.
@@ -95,25 +99,26 @@ object ScalaExecutor:
     outputCapture: ByteArrayOutputStream,
     printStream: PrintStream
   )(run: => Unit): ExecutionResult =
-    outputCapture.reset()
-    try
-      val oldOut = System.out
-      val oldErr = System.err
-      System.setOut(printStream)
-      System.setErr(printStream)
-      try run
-      finally
-        System.setOut(oldOut)
-        System.setErr(oldErr)
-      printStream.flush()
-      val output = outputCapture.toString(StandardCharsets.UTF_8).trim
-      val hasCompileErrors = output.linesIterator.exists(_.startsWith("-- [E"))
-      ExecutionResult(!hasCompileErrors, output)
-    catch
-      case e: Exception =>
+    outputCaptureLock.synchronized:
+      outputCapture.reset()
+      try
+        val oldOut = System.out
+        val oldErr = System.err
+        System.setOut(printStream)
+        System.setErr(printStream)
+        try run
+        finally
+          System.setOut(oldOut)
+          System.setErr(oldErr)
         printStream.flush()
-        ExecutionResult(false, outputCapture.toString(StandardCharsets.UTF_8).trim,
-          Some(s"${e.getClass.getSimpleName}: ${e.getMessage}"))
+        val output = outputCapture.toString(StandardCharsets.UTF_8).trim
+        val hasCompileErrors = output.linesIterator.exists(_.startsWith("-- [E"))
+        ExecutionResult(!hasCompileErrors, output)
+      catch
+        case e: Exception =>
+          printStream.flush()
+          ExecutionResult(false, outputCapture.toString(StandardCharsets.UTF_8).trim,
+            Some(s"${e.getClass.getSimpleName}: ${e.getMessage}"))
 
   /** Execute a Scala code snippet stateless and return the result */
   def execute(code: String)(using Context): ExecutionResult =
@@ -152,9 +157,9 @@ class ReplSession(val id: String)(using Context):
 object ReplSession:
   def create(using Context): ReplSession = new ReplSession(UUID.randomUUID().toString)
 
-/** Manages multiple REPL sessions */
+/** Manages multiple REPL sessions. Thread-safe via TrieMap. */
 class SessionManager(using Context):
-  private val sessions = mutable.Map[String, ReplSession]()
+  private val sessions = TrieMap[String, ReplSession]()
 
   /** Create a new session and return its ID */
   def createSession(): String =
