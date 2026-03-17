@@ -46,6 +46,6 @@ fi
 cp -f "$LIB_JAR" "$DEST_DIR/"
 cp -f "$ROOT_JAR" "$DEST_DIR/TACIT.jar"
 
-echo "Copied jars to: $DEST_DIR"
-echo "- TACIT.jar"
-echo "- TACIT-library.jar"
+echo "TACIT JARs built and copied to:"
+echo "- $DEST_DIR/TACIT.jar"
+echo "- $DEST_DIR/TACIT-library.jar"
