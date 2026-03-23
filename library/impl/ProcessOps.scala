@@ -2,22 +2,15 @@ package tacit.library
 
 import language.experimental.captureChecking
 
-import java.io.{BufferedReader, InputStreamReader}
 import java.util.concurrent.TimeUnit
+import scala.jdk.CollectionConverters.*
 
 object ProcessOps:
-  /** Drains an input stream into a StringBuilder on the current thread. */
-  private def drainStream(stream: java.io.InputStream): StringBuilder =
-    val reader = BufferedReader(InputStreamReader(stream))
-    try
-      val sb = StringBuilder()
-      var line = reader.readLine()
-      while line != null do
-        if sb.nonEmpty then sb.append('\n')
-        sb.append(line)
-        line = reader.readLine()
-      sb
-    finally reader.close()
+  /** Drains an input stream into a string on the current thread. */
+  private def drainStream(stream: java.io.InputStream): String =
+    val source = scala.io.Source.fromInputStream(stream)
+    try source.getLines().mkString("\n")
+    finally source.close()
 
   def exec(
     command: String,
@@ -26,10 +19,7 @@ object ProcessOps:
     timeoutMs: Long = 30000
   )(using pp: ProcessPermission): ProcessResult =
     CommandValidator.validate(command, pp)
-    val cmdList = new java.util.ArrayList[String]()
-    cmdList.add(command)
-    args.foreach(cmdList.add)
-    val pb = new ProcessBuilder(cmdList)
+    val pb = new ProcessBuilder((command :: args).asJava)
     workingDir.foreach(d => pb.directory(java.io.File(d)))
     val process = pb.start().nn
     try
@@ -37,8 +27,8 @@ object ProcessOps:
       // when the process output fills the OS pipe buffer.
       @volatile var stdout = ""
       @volatile var stderr = ""
-      val t1 = Thread(() => stdout = drainStream(process.getInputStream).toString)
-      val t2 = Thread(() => stderr = drainStream(process.getErrorStream).toString)
+      val t1 = Thread(() => stdout = drainStream(process.getInputStream))
+      val t2 = Thread(() => stderr = drainStream(process.getErrorStream))
       t1.setDaemon(true)
       t2.setDaemon(true)
       t1.start()

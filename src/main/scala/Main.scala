@@ -9,7 +9,7 @@ import io.circe.*
 import io.circe.parser.*
 import io.circe.syntax.*
 
-import java.io.{BufferedReader, InputStreamReader, PrintWriter}
+import java.io.PrintWriter
 
 /** TACIT - A Model Context Protocol server for safe Scala code execution */
 @main def StartMCP(args: String*): Unit =
@@ -25,7 +25,7 @@ import java.io.{BufferedReader, InputStreamReader, PrintWriter}
     case None =>  // Errors should have been displayed by the parser
     case Some(config) => usingContext(config):
       val server = new McpServer
-      val reader = new BufferedReader(new InputStreamReader(System.in))
+      val stdinLines = scala.io.Source.fromInputStream(System.in).getLines()
       val writer = new PrintWriter(jsonRpcOut, true)
 
       def printStartupBanner(): Unit =
@@ -60,37 +60,32 @@ import java.io.{BufferedReader, InputStreamReader, PrintWriter}
       if !config.quiet then printStartupBanner()
 
       try
-        var running = true
-        while running do
-          val line = reader.readLine()
-          if line == null then
-            running = false
-          else if line.trim.nonEmpty then
-            log(s"Received: ${line.take(200)}...")
+        for line <- stdinLines if line.trim.nonEmpty do
+          log(s"Received: ${line.take(200)}...")
 
-            parse(line) match
-              case Left(error) =>
-                val response = JsonRpcResponse.error(
-                  None,
-                  JsonRpcError.ParseError,
-                  s"Parse error: ${error.message}"
-                )
-                sendResponse(writer, response)
+          parse(line) match
+            case Left(error) =>
+              val response = JsonRpcResponse.error(
+                None,
+                JsonRpcError.ParseError,
+                s"Parse error: ${error.message}"
+              )
+              sendResponse(writer, response)
 
-              case Right(json) =>
-                json.as[JsonRpcRequest] match
-                  case Left(error) =>
-                    val response = JsonRpcResponse.error(
-                      None,
-                      JsonRpcError.InvalidRequest,
-                      s"Invalid request: ${error.message}"
-                    )
+            case Right(json) =>
+              json.as[JsonRpcRequest] match
+                case Left(error) =>
+                  val response = JsonRpcResponse.error(
+                    None,
+                    JsonRpcError.InvalidRequest,
+                    s"Invalid request: ${error.message}"
+                  )
+                  sendResponse(writer, response)
+
+                case Right(request) =>
+                  server.handleRequest(request).foreach { response =>
                     sendResponse(writer, response)
-
-                  case Right(request) =>
-                    server.handleRequest(request).foreach { response =>
-                      sendResponse(writer, response)
-                    }
+                  }
       catch
         case e: Exception =>
           error(e.getMessage)

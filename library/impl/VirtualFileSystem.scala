@@ -3,9 +3,6 @@ package tacit.library
 import language.experimental.captureChecking
 
 import scala.collection.concurrent.TrieMap
-import scala.collection.mutable.ListBuffer
-
-import java.io.{BufferedReader, StringReader}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Path, Paths}
 
@@ -70,29 +67,13 @@ class VirtualFileSystem(
       requireNotClassified(resolved, "readLines")
       val raw = getOrThrow(resolved)
       val content = String(raw, StandardCharsets.UTF_8)
-      val reader = BufferedReader(StringReader(content))
-      try
-        val lines = ListBuffer[String]()
-        var line: String | Null = reader.readLine()
-        while line != null do
-          lines += line
-          line = reader.readLine()
-        lines.toList
-      finally reader.close()
+      content.linesIterator.toList
 
     def forEachLine(op: (String, Int) => Unit): Unit =
       requireNotClassified(resolved, "forEachLine")
       val raw = getOrThrow(resolved)
       val content = String(raw, StandardCharsets.UTF_8)
-      val reader = BufferedReader(StringReader(content))
-      try
-        var line: String | Null = reader.readLine()
-        var idx = 1
-        while line != null do
-          op(line, idx)
-          idx += 1
-          line = reader.readLine()
-      finally reader.close()
+      content.linesIterator.zipWithIndex.foreach((line, idx) => op(line, idx + 1))
 
     def delete(): Unit =
       requireNotClassified(resolved, "delete")

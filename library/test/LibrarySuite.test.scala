@@ -1,8 +1,10 @@
 package tacit.library
 
+import language.experimental.captureChecking
+
 import java.nio.file.{Files, Path}
 import scala.compiletime.uninitialized
-import language.experimental.captureChecking
+import scala.jdk.CollectionConverters.*
 
 class LibrarySuite extends munit.FunSuite:
 
@@ -19,8 +21,9 @@ class LibrarySuite extends munit.FunSuite:
 
   override def afterEach(context: AfterEach): Unit =
     if Files.exists(tmpDir) then
-      Files.walk(tmpDir).sorted(java.util.Comparator.reverseOrder())
-        .forEach(p => Files.deleteIfExists(p))
+      Files.walk(tmpDir).iterator().asScala.toList
+        .sortBy(_.toString)(Ordering[String].reverse)
+        .foreach(p => Files.deleteIfExists(p))
 
   test("read/write file round-trip within allowed root") {
     val filePath = tmpDir.resolve("hello.txt").toString

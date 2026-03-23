@@ -1,6 +1,7 @@
 import tacit.executor.{CodeRecorder, ExecutionResult}
 import java.io.File
 import java.nio.file.Files
+import scala.io.Source
 
 class CodeRecorderSuite extends munit.FunSuite:
 
@@ -40,7 +41,7 @@ class CodeRecorderSuite extends munit.FunSuite:
       val files = scalaFiles(dir)
       assertEquals(files.length, 1)
       assert(files.head.getName.contains("session-abc"))
-      val content = scala.io.Source.fromFile(files.head).mkString
+      val content = Source.fromFile(files.head).mkString
       assertEquals(content, "println(42)")
     }
 
@@ -50,7 +51,7 @@ class CodeRecorderSuite extends munit.FunSuite:
       recorder.record("1 + 1", "s1", ExecutionResult(true, "val res0: Int = 2"))
       recorder.close()
 
-      val content = scala.io.Source.fromFile(resultFiles(dir).head).mkString
+      val content = Source.fromFile(resultFiles(dir).head).mkString
       assert(content.contains("status: success"))
       assert(content.contains("val res0: Int = 2"))
     }
@@ -61,7 +62,7 @@ class CodeRecorderSuite extends munit.FunSuite:
       recorder.record("bad code", "s2", ExecutionResult(false, "", Some("syntax error")))
       recorder.close()
 
-      val content = scala.io.Source.fromFile(resultFiles(dir).head).mkString
+      val content = Source.fromFile(resultFiles(dir).head).mkString
       assert(content.contains("status: failure"))
       assert(content.contains("Error: syntax error"))
     }
@@ -76,13 +77,13 @@ class CodeRecorderSuite extends munit.FunSuite:
       val codes = scalaFiles(dir)
       assertEquals(codes.length, 2)
 
-      val contents = codes.map(f => scala.io.Source.fromFile(f).mkString).toSet
+      val contents = codes.map(f => Source.fromFile(f).mkString).toSet
       assert(contents.contains("first"))
       assert(contents.contains("second"))
 
       val results = resultFiles(dir)
       assertEquals(results.length, 2)
-      val resultContents = results.map(f => scala.io.Source.fromFile(f).mkString)
+      val resultContents = results.map(f => Source.fromFile(f).mkString)
       assert(resultContents.exists(_.contains("out1")))
       assert(resultContents.exists(_.contains("out2")))
     }
@@ -97,7 +98,7 @@ class CodeRecorderSuite extends munit.FunSuite:
 
       val codes = scalaFiles(dir)
       assertEquals(codes.length, 1)
-      val content = scala.io.Source.fromFile(codes.head).mkString
+      val content = Source.fromFile(codes.head).mkString
       assertEquals(content, "")
     }
 
@@ -108,7 +109,7 @@ class CodeRecorderSuite extends munit.FunSuite:
       recorder.record(code, "s1", ExecutionResult(true, "val π: Double = 3.14159"))
       recorder.close()
 
-      val content = scala.io.Source.fromFile(scalaFiles(dir).head).mkString
+      val content = Source.fromFile(scalaFiles(dir).head).mkString
       assertEquals(content, code)
     }
 
@@ -118,7 +119,7 @@ class CodeRecorderSuite extends munit.FunSuite:
       recorder.record("bad code", "s1", ExecutionResult(false, "partial output", Some("RuntimeException: boom")))
       recorder.close()
 
-      val content = scala.io.Source.fromFile(resultFiles(dir).head).mkString
+      val content = Source.fromFile(resultFiles(dir).head).mkString
       assert(content.contains("status: failure"))
       assert(content.contains("partial output"))
       assert(content.contains("Error: RuntimeException: boom"))
@@ -145,6 +146,6 @@ class CodeRecorderSuite extends munit.FunSuite:
       recorder.record("val x = 1", "s1", ExecutionResult(true, ""))
       recorder.close()
 
-      val content = scala.io.Source.fromFile(resultFiles(dir).head).mkString
+      val content = Source.fromFile(resultFiles(dir).head).mkString
       assert(content.contains("status: success"))
     }

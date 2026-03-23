@@ -8,11 +8,11 @@ case class LlmConfig(baseUrl: String, apiKey: String, model: String):
 
 case class Config(
   recordPath: Option[String] = None,
-  strictMode: Boolean = false,
+  strictMode: Boolean = true,
   classifiedPaths: Set[String] = Set.empty,
   llmConfig: Option[LlmConfig] = None,
   quiet: Boolean = false,
-  wrappedCode: Boolean = true,
+  wrappedCode: Boolean = false,
   sessionEnabled: Boolean = true,
   libraryJarPath: String = Option(System.getProperty("tacit.library.jar")).getOrElse(""),
 )

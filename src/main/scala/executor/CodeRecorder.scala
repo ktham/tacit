@@ -5,6 +5,7 @@ import java.nio.file.Files
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.time.ZoneOffset
+import java.util.concurrent.atomic.AtomicLong
 
 /** Records user-submitted code and execution results to log files.
   *
@@ -20,7 +21,7 @@ class CodeRecorder(dir: File):
 
   private val dirPath = dir.toPath
   private val tsFormat = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss.SSS").withZone(ZoneOffset.UTC)
-  private val counter = java.util.concurrent.atomic.AtomicLong(0)
+  private val counter = AtomicLong(0)
 
   def record(code: String, sessionId: String, result: ExecutionResult): Unit =
     val base = s"${tsFormat.format(Instant.now())}_%04d_$sessionId".format(counter.getAndIncrement())
