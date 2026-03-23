@@ -1,14 +1,15 @@
 package tacit
 
-import io.circe.*
-import io.circe.parser.*
-import io.circe.syntax.*
-import java.io.{BufferedReader, InputStreamReader, PrintWriter}
 import tacit.mcp.*
-import tacit.core.Config
 import tacit.core.*
 import Context.*
 import Log.*
+
+import io.circe.*
+import io.circe.parser.*
+import io.circe.syntax.*
+
+import java.io.{BufferedReader, InputStreamReader, PrintWriter}
 
 /** TACIT - A Model Context Protocol server for safe Scala code execution */
 @main def StartMCP(args: String*): Unit =
@@ -40,7 +41,7 @@ import Log.*
         val llmStatus = config.llmConfig match
           case Some(cfg) => s"LLM:       ON -> ${cfg.model} @ ${cfg.baseUrl}"
           case None      => "LLM:       OFF"
-        val libraryStatus = s"Library:   ${config.libraryJarPath.get}"
+        val libraryStatus = s"Library:   ${config.libraryJarPath}"
 
         System.err.println(
           s"""

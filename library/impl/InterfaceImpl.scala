@@ -1,7 +1,8 @@
 package tacit.library
 
-import java.nio.file.Path
 import language.experimental.captureChecking
+
+import java.nio.file.Path
 
 class InterfaceImpl(
   private val createFS: (String, String -> Boolean, Set[Path]) => FileSystem^,

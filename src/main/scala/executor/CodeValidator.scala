@@ -4,19 +4,19 @@ import scala.util.matching.Regex
 
 /** A violation found by the code validator. */
 case class ValidationViolation(
-    ruleId: String,
-    description: String,
-    lineNumber: Int,
-    snippet: String
+  ruleId: String,
+  description: String,
+  lineNumber: Int,
+  snippet: String
 )
 
 /** Validates user code against forbidden patterns before REPL execution. */
 object CodeValidator:
 
   private case class ForbiddenPattern(
-      id: String,
-      regex: Regex,
-      description: String
+    id: String,
+    regex: Regex,
+    description: String
   )
 
   private val forbiddenPatterns: List[ForbiddenPattern] = List(
@@ -53,7 +53,6 @@ object CodeValidator:
     ForbiddenPattern("reflect-forname", raw"Class\.forName".r, "Class.forName is forbidden"),
 
     // JVM internals
-    ForbiddenPattern("jvm-sun-misc", raw"sun\.misc\b".r, "sun.misc access is forbidden"),
     ForbiddenPattern("jvm-jdk-internal", raw"jdk\.internal\b".r, "jdk.internal access is forbidden"),
     ForbiddenPattern("jvm-sun", raw"\bsun\.\w+".r, "sun.* access is forbidden"),
     ForbiddenPattern("jvm-com-sun", raw"com\.sun\.\w+".r, "com.sun.* access is forbidden"),

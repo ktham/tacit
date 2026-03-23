@@ -1,24 +1,26 @@
 package tacit.library
 
+import language.experimental.captureChecking
+
+import scala.collection.mutable.ListBuffer
+import scala.jdk.CollectionConverters.*
+
+import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, FileVisitResult, Path, Paths, SimpleFileVisitor}
 import java.nio.file.attribute.BasicFileAttributes
-import scala.jdk.CollectionConverters.*
-import scala.collection.mutable.ListBuffer
-import language.experimental.captureChecking
 
 class RealFileSystem(
   val root: Path,
   check: String -> Boolean = _ => true,
   classifiedPaths: Set[Path] = Set.empty
-) extends FileSystem:
-  // Resolve symlinks in the root so that comparisons work correctly
-  // (e.g. on macOS where /tmp -> /private/tmp)
-  private val normalizedRoot =
+) extends BaseFileSystem:
+  protected val normalizedRoot: Path =
     val abs = root.toAbsolutePath.normalize
     if Files.exists(abs) then abs.toRealPath() else abs
-  private val normalizedClassified = classifiedPaths.map: cp =>
+  protected val normalizedClassified: Set[Path] = classifiedPaths.map: cp =>
     val abs = cp.toAbsolutePath.normalize
     if Files.exists(abs) then abs.toRealPath() else abs
+  protected def pathCheck(relativePath: String): Boolean = check(relativePath)
 
   /** Resolves symlinks in a path. For existing paths, uses toRealPath().
     * For non-existing paths, resolves the nearest existing ancestor and
@@ -29,8 +31,9 @@ class RealFileSystem(
     if Files.exists(absPath) then absPath.toRealPath()
     else
       val parent = absPath.getParent
-      if parent != null && parent != absPath then
-        resolveReal(parent).resolve(absPath.getFileName)
+      val fileName = absPath.getFileName
+      if parent != null && fileName != null && parent != absPath then
+        resolveReal(parent).resolve(fileName)
       else absPath
 
   /** Resolves and validates that a path is within the allowed root.
@@ -45,42 +48,19 @@ class RealFileSystem(
       )
     resolved
 
-  private def checkPath(resolved: Path): Unit =
-    val relativePath = normalizedRoot.relativize(resolved).toString
-    if relativePath.nonEmpty && !check(relativePath) then
-      throw SecurityException(
-        s"Access denied: path '$relativePath' did not pass the check"
-      )
-
-  // startsWith returns true when resolved == cp, so the equality check is redundant
-  private def isClassifiedPath(resolved: Path): Boolean =
-    normalizedClassified.exists(cp => resolved.startsWith(cp))
-
-  private def requireNotClassified(jpath: Path, op: String): Unit =
-    if isClassifiedPath(jpath) then
-      throw SecurityException(
-        s"Access denied: '$op' is not allowed on classified path $jpath. Use classified operations instead."
-      )
-
-  private def requireClassified(jpath: Path, op: String): Unit =
-    if !isClassifiedPath(jpath) then
-      throw SecurityException(
-        s"Access denied: '$op' is only allowed on classified paths, but $jpath is not classified."
-      )
-
   private class FileEntryImpl(jpath: Path) extends FileEntry(this):
     def path: String = jpath.toString
     def name: String = jpath.getFileName.nn.toString
     def read(): String =
       requireNotClassified(jpath, "read")
-      String(Files.readAllBytes(jpath))
+      String(Files.readAllBytes(jpath), StandardCharsets.UTF_8)
     def readBytes(): Array[Byte] =
       requireNotClassified(jpath, "readBytes")
       Files.readAllBytes(jpath)
     def write(content: String): Unit =
       requireNotClassified(jpath, "write")
       Files.createDirectories(jpath.getParent)
-      Files.write(jpath, content.getBytes)
+      Files.write(jpath, content.getBytes(StandardCharsets.UTF_8))
       ()
 
     def append(content: String): Unit =
@@ -94,6 +74,18 @@ class RealFileSystem(
     def readLines(): List[String] =
       requireNotClassified(jpath, "readLines")
       Files.readAllLines(jpath).nn.asScala.toList
+
+    def forEachLine(op: (String, Int) => Unit): Unit =
+      requireNotClassified(jpath, "forEachLine")
+      val reader = Files.newBufferedReader(jpath, StandardCharsets.UTF_8)
+      try
+        var line: String | Null = reader.readLine()
+        var idx = 1
+        while line != null do
+          op(line, idx)
+          idx += 1
+          line = reader.readLine()
+      finally reader.close()
 
     def delete(): Unit =
       requireNotClassified(jpath, "delete")
@@ -128,12 +120,12 @@ class RealFileSystem(
 
     def readClassified(): Classified[String] =
       requireClassified(jpath, "readClassified")
-      ClassifiedImpl.wrap(String(Files.readAllBytes(jpath)))
+      ClassifiedImpl.wrap(String(Files.readAllBytes(jpath), StandardCharsets.UTF_8))
 
     def writeClassified(content: Classified[String]): Unit =
       requireClassified(jpath, "writeClassified")
       Files.createDirectories(jpath.getParent)
-      Files.write(jpath, ClassifiedImpl.unwrap(content).getBytes)
+      Files.write(jpath, ClassifiedImpl.unwrap(content).getBytes(StandardCharsets.UTF_8))
       ()
   end FileEntryImpl
 

@@ -1,32 +1,36 @@
 package tacit.library
 
-import java.io.{BufferedReader, StringReader}
-import java.nio.file.{Path, Paths}
-import scala.collection.mutable
-import scala.collection.mutable.ListBuffer
 import language.experimental.captureChecking
+
+import scala.collection.concurrent.TrieMap
+import scala.collection.mutable.ListBuffer
+
+import java.io.{BufferedReader, StringReader}
+import java.nio.charset.StandardCharsets
+import java.nio.file.{Path, Paths}
 
 class VirtualFileSystem(
   val root: Path,
   check: String -> Boolean = _ => true,
   initialFiles: Map[String, String] = Map.empty,
   classifiedPaths: Set[Path] = Set.empty
-) extends FileSystem:
-  private val normalizedRoot = root.toAbsolutePath.normalize
-  private val normalizedClassified = classifiedPaths.map(_.toAbsolutePath.normalize)
-  private val files: mutable.Map[Path, Array[Byte]] = mutable.Map.empty
-  private val directories: mutable.Set[Path] = mutable.Set(normalizedRoot)
+) extends BaseFileSystem:
+  protected val normalizedRoot: Path = root.toAbsolutePath.normalize
+  protected val normalizedClassified: Set[Path] = classifiedPaths.map(_.toAbsolutePath.normalize)
+  protected def pathCheck(relativePath: String): Boolean = check(relativePath)
+  private val files: TrieMap[Path, Array[Byte]] = TrieMap.empty
+  private val directories: TrieMap[Path, Unit] = TrieMap(normalizedRoot -> ())
 
   initialFiles.foreach { (relPath, content) =>
     val resolved = normalizedRoot.resolve(relPath).normalize
     ensureParentDirs(resolved)
-    files(resolved) = content.getBytes
+    files(resolved) = content.getBytes(StandardCharsets.UTF_8)
   }
 
   private def ensureParentDirs(path: Path): Unit =
     var parent: Path | Null = path.getParent
     while parent != null do
-      directories += parent
+      directories(parent) = ()
       parent = parent.getParent
 
   private def resolvePath(target: String): Path =
@@ -37,53 +41,35 @@ class VirtualFileSystem(
       )
     resolved
 
-  private def checkPath(resolved: Path): Unit =
-    val relativePath = normalizedRoot.relativize(resolved).toString
-    if relativePath.nonEmpty && !check(relativePath) then
-      throw SecurityException(
-        s"Access denied: path '$relativePath' did not pass the check"
-      )
-
-  private def isClassifiedPath(resolved: Path): Boolean =
-    normalizedClassified.exists(cp => resolved.startsWith(cp))
-
-  private def requireNotClassified(resolved: Path, op: String): Unit =
-    if isClassifiedPath(resolved) then
-      throw SecurityException(
-        s"Access denied: '$op' is not allowed on classified path $resolved. Use classified operations instead."
-      )
-
-  private def requireClassified(resolved: Path, op: String): Unit =
-    if !isClassifiedPath(resolved) then
-      throw SecurityException(
-        s"Access denied: '$op' is only allowed on classified paths, but $resolved is not classified."
-      )
-
   private class FileEntryImpl(resolved: Path) extends FileEntry(this):
     def path: String = resolved.toString
     def name: String = resolved.getFileName.nn.toString
     def read(): String =
       requireNotClassified(resolved, "read")
-      String(readBytes())
+      String(readBytes(), StandardCharsets.UTF_8)
+    private def getOrThrow(path: Path): Array[Byte] =
+      files.getOrElse(path, throw java.nio.file.NoSuchFileException(path.toString))
+
     def readBytes(): Array[Byte] =
       requireNotClassified(resolved, "readBytes")
-      files.getOrElse(resolved, throw java.nio.file.NoSuchFileException(resolved.toString))
+      getOrThrow(resolved)
 
     def write(content: String): Unit =
       requireNotClassified(resolved, "write")
       ensureParentDirs(resolved)
-      files(resolved) = content.getBytes
+      files(resolved) = content.getBytes(StandardCharsets.UTF_8)
 
     def append(content: String): Unit =
       requireNotClassified(resolved, "append")
-      val existing = files.getOrElse(resolved, Array.empty[Byte])
       ensureParentDirs(resolved)
-      files(resolved) = existing ++ content.getBytes
+      files.updateWith(resolved):
+        case Some(old) => Some(old ++ content.getBytes(StandardCharsets.UTF_8))
+        case None      => Some(content.getBytes(StandardCharsets.UTF_8))
 
     def readLines(): List[String] =
       requireNotClassified(resolved, "readLines")
-      val raw = files.getOrElse(resolved, throw java.nio.file.NoSuchFileException(resolved.toString))
-      val content = String(raw)
+      val raw = getOrThrow(resolved)
+      val content = String(raw, StandardCharsets.UTF_8)
       val reader = BufferedReader(StringReader(content))
       try
         val lines = ListBuffer[String]()
@@ -92,6 +78,20 @@ class VirtualFileSystem(
           lines += line
           line = reader.readLine()
         lines.toList
+      finally reader.close()
+
+    def forEachLine(op: (String, Int) => Unit): Unit =
+      requireNotClassified(resolved, "forEachLine")
+      val raw = getOrThrow(resolved)
+      val content = String(raw, StandardCharsets.UTF_8)
+      val reader = BufferedReader(StringReader(content))
+      try
+        var line: String | Null = reader.readLine()
+        var idx = 1
+        while line != null do
+          op(line, idx)
+          idx += 1
+          line = reader.readLine()
       finally reader.close()
 
     def delete(): Unit =
@@ -117,7 +117,7 @@ class VirtualFileSystem(
         val parent = p.getParent
         parent != null && parent.nn == resolved
       }
-      val childDirs = directories.filter { d =>
+      val childDirs = directories.keys.filter { d =>
         val parent = d.getParent
         d != resolved && parent != null && parent.nn == resolved
       }
@@ -125,7 +125,7 @@ class VirtualFileSystem(
 
     def walk(): List[FileEntry^{origin}] =
       requireNotClassified(resolved, "walk")
-      val allPaths = directories.filter(d => d.startsWith(resolved) && d != resolved) ++
+      val allPaths = directories.keys.filter(d => d.startsWith(resolved) && d != resolved) ++
         files.keys.filter(_.startsWith(resolved))
       allPaths.toList.map(p => new FileEntryImpl(p))
 
@@ -134,12 +134,12 @@ class VirtualFileSystem(
     def readClassified(): Classified[String] =
       requireClassified(resolved, "readClassified")
       val bytes = files.getOrElse(resolved, throw java.nio.file.NoSuchFileException(resolved.toString))
-      ClassifiedImpl.wrap(String(bytes))
+      ClassifiedImpl.wrap(String(bytes, StandardCharsets.UTF_8))
 
     def writeClassified(content: Classified[String]): Unit =
       requireClassified(resolved, "writeClassified")
       ensureParentDirs(resolved)
-      files(resolved) = ClassifiedImpl.unwrap(content).getBytes
+      files(resolved) = ClassifiedImpl.unwrap(content).getBytes(StandardCharsets.UTF_8)
   end FileEntryImpl
 
   def access(path: String): FileEntry^{this} =

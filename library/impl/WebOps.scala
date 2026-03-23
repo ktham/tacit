@@ -1,7 +1,9 @@
 package tacit.library
 
-import java.net.{URI, HttpURLConnection}
 import language.experimental.captureChecking
+
+import java.net.{URI, HttpURLConnection}
+import java.nio.charset.StandardCharsets
 
 object WebOps:
   private val TimeoutMs = 10000
@@ -13,6 +15,14 @@ object WebOps:
     if host == null then throw SecurityException(s"Invalid URL (no host): $url")
     net.validateHost(host)
 
+  /** Reads the response body, falling back to the error stream on HTTP error codes. */
+  private def readResponse(conn: HttpURLConnection): String =
+    val code = conn.getResponseCode
+    val stream = if code >= 400 then conn.getErrorStream else conn.getInputStream
+    if stream == null then return s"HTTP $code (no response body)"
+    try String(stream.readAllBytes(), StandardCharsets.UTF_8)
+    finally stream.close()
+
   def httpGet(url: String)(using net: Network): String =
     validatedHost(url)
     val conn = URI(url).toURL.openConnection().asInstanceOf[HttpURLConnection]
@@ -20,9 +30,7 @@ object WebOps:
       conn.setRequestMethod("GET")
       conn.setConnectTimeout(TimeoutMs)
       conn.setReadTimeout(TimeoutMs)
-      val is = conn.getInputStream
-      try String(is.readAllBytes())
-      finally is.close()
+      readResponse(conn)
     finally conn.disconnect()
 
   def httpPost(url: String, body: String, contentType: String)(using net: Network): String =
@@ -35,9 +43,7 @@ object WebOps:
       conn.setConnectTimeout(TimeoutMs)
       conn.setReadTimeout(TimeoutMs)
       val os = conn.getOutputStream
-      try os.write(body.getBytes)
+      try os.write(body.getBytes(StandardCharsets.UTF_8))
       finally os.close()
-      val is = conn.getInputStream
-      try String(is.readAllBytes())
-      finally is.close()
+      readResponse(conn)
     finally conn.disconnect()

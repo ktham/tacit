@@ -28,6 +28,9 @@ abstract class FileEntry(tracked val origin: FileSystem):
   def write(content: String): Unit
   def append(content: String): Unit
   def readLines(): List[String]
+  /** Process each line without loading the entire file into memory.
+   *  The callback receives the line content and its 1-based line number. */
+  def forEachLine(op: (String, Int) => Unit): Unit
   def delete(): Unit
   /** List immediate children of a directory. */
   def children: List[FileEntry^{this}]
@@ -216,8 +219,8 @@ trait Interface:
   /** HTTP GET. Returns the response body. Host must be in the allowed set. */
   def httpGet(url: String)(using net: Network): String
 
-  /** HTTP POST with `data` as body. Returns the response body. */
-  def httpPost(url: String, data: String, contentType: String = "application/json")(using net: Network): String
+  /** HTTP POST with `body`. Returns the response body. */
+  def httpPost(url: String, body: String, contentType: String = "application/json")(using net: Network): String
 
   // ── print ─────────────────────────────────────────────────────────-
 

@@ -1,6 +1,7 @@
 package tacit.executor
 
-import java.io.{File, PrintWriter, FileWriter}
+import java.io.File
+import java.nio.file.Files
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.time.ZoneOffset
@@ -17,29 +18,16 @@ import java.time.ZoneOffset
 class CodeRecorder(dir: File):
   dir.mkdirs()
 
+  private val dirPath = dir.toPath
   private val tsFormat = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss.SSS").withZone(ZoneOffset.UTC)
   private val counter = java.util.concurrent.atomic.AtomicLong(0)
 
   def record(code: String, sessionId: String, result: ExecutionResult): Unit =
-    val ts = tsFormat.format(Instant.now())
-    val seq = counter.getAndIncrement()
-    val base = s"${ts}_%04d_$sessionId".format(seq)
-
-    val codeFile = new PrintWriter(new FileWriter(File(dir, s"$base.scala")))
-    try
-      codeFile.print(code)
-    finally
-      codeFile.close()
-
-    val resultFile = new PrintWriter(new FileWriter(File(dir, s"$base.result")))
-    try
-      val status = if result.success then "success" else "failure"
-      resultFile.println(s"status: $status")
-      resultFile.println(result.output)
-      result.error.foreach { err =>
-        resultFile.println(s"Error: $err")
-      }
-    finally
-      resultFile.close()
+    val base = s"${tsFormat.format(Instant.now())}_%04d_$sessionId".format(counter.getAndIncrement())
+    Files.writeString(dirPath.resolve(s"$base.scala"), code)
+    val status = if result.success then "success" else "failure"
+    val body = StringBuilder(s"status: $status\n${result.output}")
+    result.error.foreach(e => body.append(s"\nError: $e"))
+    Files.writeString(dirPath.resolve(s"$base.result"), body.toString)
 
   def close(): Unit = ()

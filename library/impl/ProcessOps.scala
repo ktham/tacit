@@ -1,8 +1,9 @@
 package tacit.library
 
+import language.experimental.captureChecking
+
 import java.io.{BufferedReader, InputStreamReader}
 import java.util.concurrent.TimeUnit
-import language.experimental.captureChecking
 
 object ProcessOps:
   /** Drains an input stream into a StringBuilder on the current thread. */
@@ -38,6 +39,8 @@ object ProcessOps:
       @volatile var stderr = ""
       val t1 = Thread(() => stdout = drainStream(process.getInputStream).toString)
       val t2 = Thread(() => stderr = drainStream(process.getErrorStream).toString)
+      t1.setDaemon(true)
+      t2.setDaemon(true)
       t1.start()
       t2.start()
       val finished = process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)

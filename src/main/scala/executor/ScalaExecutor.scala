@@ -1,13 +1,17 @@
 package tacit
 package executor
 
-import scala.collection.concurrent.TrieMap
-import java.io.{ByteArrayOutputStream, PrintStream}
-import java.util.UUID
-import dotty.tools.repl.{ReplDriver, State}
-import java.nio.charset.StandardCharsets
-import core.{Config, Context}
+import core.Context
 import Context.*
+
+import dotty.tools.repl.{ReplDriver, State}
+
+import scala.collection.concurrent.TrieMap
+
+import java.io.{ByteArrayOutputStream, File => JFile, PrintStream}
+import java.net.URLClassLoader
+import java.nio.charset.StandardCharsets
+import java.util.UUID
 
 /** Result of code execution */
 case class ExecutionResult(
@@ -22,8 +26,8 @@ object ScalaExecutor:
   /** Returns the REPL compiler args. The library fat JAR provides the full classpath
     * (Scala stdlib + library classes + library dependencies).
     */
-  private[executor] def replClasspathArgs(cfg: Config): Array[String] =
-    val classpath = java.io.File(cfg.libraryJarPath.get).getAbsolutePath
+  private[executor] def replClasspathArgs(using Context): Array[String] =
+    val classpath = JFile(ctx.config.libraryJarPath).getAbsolutePath
 
     Array(
       "-classpath", classpath,
@@ -41,15 +45,16 @@ object ScalaExecutor:
     * and the library JAR. This prevents user code from accessing server internals
     * (tacit.core, tacit.mcp, tacit.executor) or server dependencies (circe, scopt, etc.).
     */
-  private[executor] def sandboxedClassLoader(cfg: Config): ClassLoader =
-    val libraryUrl = java.io.File(cfg.libraryJarPath.get).toURI.toURL
-    new java.net.URLClassLoader(
+  private[executor] def sandboxedClassLoader(using Context): ClassLoader =
+    val libraryUrl = JFile(ctx.config.libraryJarPath).toURI.toURL
+    new URLClassLoader(
       Array(libraryUrl),
       ClassLoader.getPlatformClassLoader  // JDK platform classes only, no application classes
     )
 
   /** Preamble code injected before user code to make the library API available. */
-  private[executor] def libraryPreamble(cfg: Config): String =
+  private[executor] def libraryPreamble(using Context): String =
+    val cfg = ctx.config
     val classifiedExpr =
       if cfg.classifiedPaths.isEmpty then "Set.empty[java.nio.file.Path]"
       else cfg.classifiedPaths
@@ -125,8 +130,8 @@ object ScalaExecutor:
     validated(code).getOrElse:
       val outputCapture = new ByteArrayOutputStream()
       val printStream = new PrintStream(outputCapture, true, StandardCharsets.UTF_8)
-      val driver = new ReplDriver(replClasspathArgs(ctx.config), printStream, Some(sandboxedClassLoader(ctx.config)))
-      var state = driver.run(libraryPreamble(ctx.config))(using driver.initialState)
+      val driver = new ReplDriver(replClasspathArgs, printStream, Some(sandboxedClassLoader))
+      var state = driver.run(libraryPreamble)(using driver.initialState)
       withOutputCapture(outputCapture, printStream):
         state = driver.run(wrapCode(code, ctx.config.wrappedCode))(using state)
 end ScalaExecutor
@@ -139,14 +144,14 @@ class ReplSession(val id: String)(using Context):
   private val printStream = new PrintStream(outputCapture, true, StandardCharsets.UTF_8)
 
   private val driver = new ReplDriver(
-    replClasspathArgs(ctx.config),
+    replClasspathArgs,
     printStream,
-    Some(sandboxedClassLoader(ctx.config))
+    Some(sandboxedClassLoader)
   )
   private var state: State =
     val s0 = driver.initialState
     // Run preamble once to make library API available in the session
-    driver.run(libraryPreamble(ctx.config))(using s0)
+    driver.run(libraryPreamble)(using s0)
 
   /** Execute code in this session and return the result */
   def execute(code: String): ExecutionResult =

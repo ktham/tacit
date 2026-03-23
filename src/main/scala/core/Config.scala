@@ -14,7 +14,7 @@ case class Config(
   quiet: Boolean = false,
   wrappedCode: Boolean = true,
   sessionEnabled: Boolean = true,
-  libraryJarPath: Option[String] = Option(System.getProperty("tacit.library.jar")),
+  libraryJarPath: String = Option(System.getProperty("tacit.library.jar")).getOrElse(""),
 )
 
 object Config:
@@ -40,7 +40,7 @@ object Config:
     val quiet = cursor.get[Boolean]("quiet").toOption.getOrElse(base.quiet)
     val wrappedCode = cursor.get[Boolean]("wrappedCode").toOption.getOrElse(base.wrappedCode)
     val sessionEnabled = cursor.get[Boolean]("sessionEnabled").toOption.getOrElse(base.sessionEnabled)
-    val libraryJarPath = cursor.get[String]("libraryJarPath").toOption.orElse(base.libraryJarPath)
+    val libraryJarPath = cursor.get[String]("libraryJarPath").toOption.getOrElse(base.libraryJarPath)
     val classifiedPaths = cursor.downField("classifiedPaths").as[List[String]].toOption
       .map(_.toSet).getOrElse(base.classifiedPaths)
     val llmConfig = cursor.downField("llm").focus.flatMap { llmJson =>
@@ -104,7 +104,7 @@ object Config:
         .action((_, c) => c.copy(sessionEnabled = false))
         .text("Disable session-related tools (create/execute/delete/list sessions)."),
       opt[String]("library-jar")
-        .action((x, c) => c.copy(libraryJarPath = Some(x)))
+        .action((x, c) => c.copy(libraryJarPath = x))
         .text("Path to the library JAR (TACIT-library.jar). Required."),
       opt[String]('c', "config")
         .action((x, c) => mergeFromFile(c, x))
@@ -130,16 +130,15 @@ object Config:
     )
 
   private def validateLibraryJar(config: Config): Option[Config] =
-    config.libraryJarPath match
-      case Some(path) =>
-        val file = java.io.File(path)
-        if !file.exists() then
-          System.err.println(s"Error: Library JAR not found: '$path'")
-          None
-        else Some(config)
-      case None =>
-        System.err.println("Error: --library-jar is required")
+    if config.libraryJarPath.isEmpty then
+      System.err.println("Error: --library-jar is required")
+      None
+    else
+      val file = java.io.File(config.libraryJarPath)
+      if !file.exists() then
+        System.err.println(s"Error: Library JAR not found: '${config.libraryJarPath}'")
         None
+      else Some(config)
 
   def parseCliArgs(args: Array[String]): Option[Config] =
     OParser.parse(optParser, args, Config())
