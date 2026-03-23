@@ -37,6 +37,10 @@ jobs:
       uses: sbt/setup-sbt@v1
     - name: Run tests
       run: sbt test
+    - name: Set up Scala CLI
+      uses: VirtusLab/scala-cli-setup@v1
+    - name: Run library tests
+      run: cd library && scala-cli test .
 
   publish-release:
     if: github.event_name == 'release'
