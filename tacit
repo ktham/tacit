@@ -145,9 +145,9 @@ extract_release_id() {
 
 extract_assets() {
   local json="$1"
-  local library_url=""
-  local assembly_url=""
-  local current_name=""
+  local library_url="" library_digest=""
+  local assembly_url="" assembly_digest=""
+  local current_name="" current_digest=""
   local url=""
 
   while IFS= read -r token; do
@@ -156,25 +156,35 @@ extract_assets() {
       continue
     fi
 
+    if [[ "$token" =~ \"digest\"[[:space:]]*:[[:space:]]*\"([^\"]+)\" ]]; then
+      current_digest="${BASH_REMATCH[1]}"
+      continue
+    fi
+
     if [[ "$token" =~ \"browser_download_url\"[[:space:]]*:[[:space:]]*\"([^\"]+)\" ]]; then
       url="${BASH_REMATCH[1]}"
 
       if [[ "$current_name" == "TACIT-library.jar" ]]; then
         library_url="$url"
+        library_digest="$current_digest"
       fi
 
       if [[ "$current_name" == "TACIT.jar" ]]; then
         assembly_url="$url"
+        assembly_digest="$current_digest"
       fi
 
       current_name=""
+      current_digest=""
     fi
-  done < <(printf '%s' "$json" | grep -oE '"name"[[:space:]]*:[[:space:]]*"[^"]+"|"browser_download_url"[[:space:]]*:[[:space:]]*"[^"]+"')
+  done < <(printf '%s' "$json" | grep -oE '"name"[[:space:]]*:[[:space:]]*"[^"]+"|"digest"[[:space:]]*:[[:space:]]*"[^"]+"|"browser_download_url"[[:space:]]*:[[:space:]]*"[^"]+"')
 
   [[ -n "$assembly_url" ]] || fail "required asset TACIT.jar not found in the latest release."
   [[ -n "$library_url" ]] || fail "required asset TACIT-library.jar not found in the latest release."
 
-  printf 'TACIT.jar\t%s\nTACIT-library.jar\t%s\n' "$assembly_url" "$library_url"
+  printf 'TACIT.jar\t%s\t%s\nTACIT-library.jar\t%s\t%s\n' \
+    "$assembly_url" "$assembly_digest" \
+    "$library_url" "$library_digest"
 }
 
 release_key_from_json() {
@@ -185,6 +195,44 @@ release_key_from_json() {
   tag_name="$(extract_release_field "$json" "tag_name")"
   [[ -n "$release_id" && -n "$tag_name" ]] || fail "failed to parse the latest release metadata."
   printf '%s|%s\n' "$release_id" "$tag_name"
+}
+
+sha256_of() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    echo "Warning: no sha256sum or shasum found, skipping checksum verification." >&2
+    return 1
+  fi
+}
+
+verify_jar() {
+  local file="$1" digest="$2"
+  local name expected actual
+
+  name="$(basename "$file")"
+
+  if [[ -z "$digest" ]]; then
+    echo "  ${name}: no digest in release metadata, skipping"
+    return 0
+  fi
+
+  # digest format is "sha256:<hex>"
+  if [[ "$digest" =~ ^sha256:(.+)$ ]]; then
+    expected="${BASH_REMATCH[1]}"
+  else
+    echo "  ${name}: unrecognised digest format '${digest}', skipping"
+    return 0
+  fi
+
+  actual="$(sha256_of "$file")" || return 0
+
+  if [[ "$actual" != "$expected" ]]; then
+    fail "Checksum mismatch for ${name}: expected ${expected}, got ${actual}"
+  fi
+  echo "  ${name}: OK"
 }
 
 cached_release_matches() {
@@ -210,12 +258,21 @@ download_latest_release() {
   tmp_dir="$(mktemp -d "${CACHE_DIR}/download.XXXXXX")"
   trap 'rm -rf "$tmp_dir"' EXIT
 
+  local assets_info
+  assets_info="$(extract_assets "$json")"
+
   echo "Downloading the latest TACIT release to ${CACHE_DIR}"
-  while IFS=$'\t' read -r name url; do
+  while IFS=$'\t' read -r name url _digest; do
     [[ -n "$name" && -n "$url" ]] || continue
     echo "- ${name}"
     curl -fL "$url" -o "${tmp_dir}/${name}"
-  done < <(extract_assets "$json")
+  done <<< "$assets_info"
+
+  echo "Verifying checksums..."
+  while IFS=$'\t' read -r name _url digest; do
+    [[ -n "$name" && -f "${tmp_dir}/${name}" ]] || continue
+    verify_jar "${tmp_dir}/${name}" "$digest"
+  done <<< "$assets_info"
 
   mv "${tmp_dir}/TACIT.jar" "$SERVER_JAR"
   mv "${tmp_dir}/TACIT-library.jar" "$LIBRARY_JAR"

@@ -12,6 +12,7 @@
       "name": "TACIT.jar",
       "content_type": "application/java-archive",
       "size": 50000000,
+      "digest": "sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
       "browser_download_url": "https://github.com/lampepfl/tacit/releases/download/v0.2.0/TACIT.jar"
     },
     {
@@ -20,6 +21,7 @@
       "name": "TACIT-library.jar",
       "content_type": "application/java-archive",
       "size": 30000000,
+      "digest": "sha256:fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321",
       "browser_download_url": "https://github.com/lampepfl/tacit/releases/download/v0.2.0/TACIT-library.jar"
     },
     {
@@ -28,6 +30,7 @@
       "name": "checksums.txt",
       "content_type": "text/plain",
       "size": 256,
+      "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
       "browser_download_url": "https://github.com/lampepfl/tacit/releases/download/v0.2.0/checksums.txt"
     }
   ]

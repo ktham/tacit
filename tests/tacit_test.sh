@@ -140,6 +140,14 @@ assert_contains "TACIT-library.jar download URL" \
   "https://github.com/lampepfl/tacit/releases/download/v0.2.0/TACIT-library.jar" \
   "$assets_output"
 
+assert_contains "TACIT.jar digest" \
+  "sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890" \
+  "$assets_output"
+
+assert_contains "TACIT-library.jar digest" \
+  "sha256:fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321" \
+  "$assets_output"
+
 assert_not_contains "extra assets ignored" \
   "checksums.txt" \
   "$assets_output"
@@ -151,6 +159,11 @@ assert_fails "fails when TACIT.jar missing" extract_assets "$json_no_server"
 # Missing TACIT-library.jar
 json_no_lib='{"assets":[{"name":"TACIT.jar","browser_download_url":"https://x/TACIT.jar"}]}'
 assert_fails "fails when TACIT-library.jar missing" extract_assets "$json_no_lib"
+
+# No digest (older releases)
+json_no_digest='{"assets":[{"name":"TACIT.jar","browser_download_url":"https://x/TACIT.jar"},{"name":"TACIT-library.jar","browser_download_url":"https://x/TACIT-library.jar"}]}'
+assets_no_digest="$(extract_assets "$json_no_digest")"
+assert_contains "works without digest" "TACIT.jar" "$assets_no_digest"
 
 # ---------------------------------------------------------------------------
 # release_key_from_json
@@ -332,6 +345,37 @@ PROF
   after="$(cat "$profile")"
 
   assert_eq "profile without markers unchanged" "$before" "$after"
+)
+
+# ---------------------------------------------------------------------------
+# verify_jar
+# ---------------------------------------------------------------------------
+
+echo "--- verify_jar ---"
+
+(
+  TEST_TMP="$(mktemp -d)"
+  trap 'rm -rf "$TEST_TMP"' EXIT
+
+  # Create a test file and compute its real sha256
+  echo "test content" > "$TEST_TMP/test.jar"
+  real_hash="$(sha256_of "$TEST_TMP/test.jar")"
+
+  # Correct digest
+  assert_succeeds "passes with correct digest" \
+    verify_jar "$TEST_TMP/test.jar" "sha256:${real_hash}"
+
+  # Wrong digest
+  assert_fails "fails with wrong digest" \
+    verify_jar "$TEST_TMP/test.jar" "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+
+  # Empty digest (older releases without digest)
+  assert_succeeds "passes with empty digest" \
+    verify_jar "$TEST_TMP/test.jar" ""
+
+  # Unknown digest format
+  output="$(verify_jar "$TEST_TMP/test.jar" "md5:abc123" 2>&1)"
+  assert_contains "skips unrecognised digest format" "unrecognised" "$output"
 )
 
 # ---------------------------------------------------------------------------
