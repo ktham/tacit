@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-OWNER_REPO="lampepfl/TACIT"
+OWNER_REPO="lampepfl/tacit"
 SCRIPT_SOURCE_URL="https://raw.githubusercontent.com/${OWNER_REPO}/refs/heads/main/tacit"
 CACHE_DIR="${HOME}/.cache/tacit"
 INSTALL_DIR="${HOME}/.local/bin"
@@ -208,7 +208,7 @@ download_latest_release() {
   fi
 
   tmp_dir="$(mktemp -d "${CACHE_DIR}/download.XXXXXX")"
-  trap 'rm -rf "$tmp_dir"' RETURN
+  trap 'rm -rf "$tmp_dir"' EXIT
 
   echo "Downloading the latest TACIT release to ${CACHE_DIR}"
   while IFS=$'\t' read -r name url; do
@@ -221,7 +221,7 @@ download_latest_release() {
   mv "${tmp_dir}/TACIT-library.jar" "$LIBRARY_JAR"
   printf '%s\n' "$release_key" > "$RELEASE_MARKER"
 
-  trap - RETURN
+  trap - EXIT
   rmdir "$tmp_dir" 2>/dev/null || true
 
   echo "Latest TACIT release is ready:"
@@ -238,7 +238,7 @@ profile_candidates() {
       printf '%s\n' "${HOME}/.zshrc" "${HOME}/.zprofile"
       ;;
     bash)
-      printf '%s\n' "${HOME}/.bashrc" "${HOME}/.profile"
+      printf '%s\n' "${HOME}/.bashrc" "${HOME}/.bash_profile" "${HOME}/.profile"
       ;;
     *)
       printf '%s\n' "${HOME}/.profile"
@@ -249,9 +249,10 @@ profile_candidates() {
 path_snippet() {
   cat <<EOF
 ${PATH_MARKER_BEGIN}
-if [[ ":\$PATH:" != *":\$HOME/.local/bin:"* ]]; then
-  export PATH="\$HOME/.local/bin:\$PATH"
-fi
+case ":\$PATH:" in
+  *":\$HOME/.local/bin:"*) ;;
+  *) export PATH="\$HOME/.local/bin:\$PATH" ;;
+esac
 ${PATH_MARKER_END}
 EOF
 }
@@ -263,8 +264,7 @@ update_profile_path() {
   snippet="$(path_snippet)"
 
   while IFS= read -r file; do
-    [[ -n "$file" ]] || continue
-    touch "$file"
+    [[ -n "$file" && -f "$file" ]] || continue
     content="$(cat "$file")"
     if [[ "$content" == *"$PATH_MARKER_BEGIN"* ]] || [[ "$content" == *'$HOME/.local/bin'* ]] || [[ "$content" == *"${HOME}/.local/bin"* ]]; then
       continue
@@ -317,7 +317,7 @@ download_latest_self() {
 }
 
 require_cached_jars() {
-  [[ -f "$SERVER_JAR" && -f "$LIBRARY_JAR" ]] || fail "No cached TACIT jars were found. Run 'tacit update' first."
+  [[ -f "$SERVER_JAR" && -f "$LIBRARY_JAR" ]] || fail "No cached TACIT jars were found. Run 'tacit setup' (first time) or 'tacit update'."
 }
 
 cmd_setup() {
@@ -366,6 +366,35 @@ cmd_self_update() {
   echo "Updated tacit at ${source_path}"
 }
 
+remove_profile_path() {
+  local file content cleaned
+
+  while IFS= read -r file; do
+    [[ -n "$file" && -f "$file" ]] || continue
+    content="$(cat "$file")"
+    [[ "$content" == *"$PATH_MARKER_BEGIN"* ]] || continue
+
+    cleaned="$(awk -v begin="$PATH_MARKER_BEGIN" -v end="$PATH_MARKER_END" '
+      index($0, begin) { skip=1; next }
+      index($0, end)   { skip=0; next }
+      !skip
+    ' "$file")"
+
+    # Remove trailing blank lines left behind
+    cleaned="$(printf '%s\n' "$cleaned" | awk '
+      { lines[NR] = $0 }
+      END {
+        last = NR
+        while (last > 0 && lines[last] ~ /^[[:space:]]*$/) last--
+        for (i = 1; i <= last; i++) print lines[i]
+      }
+    ')"
+
+    printf '%s\n' "$cleaned" > "$file"
+    echo "Cleaned PATH snippet from ${file}"
+  done < <(profile_candidates)
+}
+
 cmd_uninstall() {
   if [[ -f "$INSTALL_PATH" ]]; then
     rm -f "$INSTALL_PATH"
@@ -380,6 +409,8 @@ cmd_uninstall() {
   else
     echo "No TACIT cache directory was found at ${CACHE_DIR}."
   fi
+
+  remove_profile_path
 }
 
 cmd_serve() {
@@ -445,4 +476,6 @@ main() {
   esac
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

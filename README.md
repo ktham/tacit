@@ -30,7 +30,7 @@ Choose one of the installation approaches below. The `tacit` CLI wrapper is the 
 
 ```bash
 # Download the wrapper directly (no git clone required)
-curl -fsSL https://raw.githubusercontent.com/lampepfl/TACIT/refs/heads/main/tacit -o tacit
+curl -fsSL https://raw.githubusercontent.com/lampepfl/tacit/refs/heads/main/tacit -o tacit
 chmod +x tacit
 
 # Install it and download the latest TACIT release
@@ -465,7 +465,7 @@ Agent-generated code is compiled under Scala 3's *safe mode* (`import language.e
 
 These restrictions prevent agents from "forgetting" capabilities through unsafe casts, reflection, or type system holes. Code that does not pass compilation is never executed.
 
-The safe mode is an experimental feature and still under active development and testing. We current use a static code validator that checks for forbidden patterns to enforce the safe mode subset. We are planning to migrate to the official Scala 3 safe mode once soon.
+The safe mode is an experimental feature and still under active development and testing. We currently use a static code validator that checks for forbidden patterns to enforce the safe mode subset. We are planning to migrate to the official Scala 3 safe mode once soon.
 
 ### LLM Integration
 
