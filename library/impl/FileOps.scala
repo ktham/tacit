@@ -1,12 +1,14 @@
 package tacit.library
 
 import language.experimental.captureChecking
+import caps.assumeSafe
 
 import scala.collection.mutable.ListBuffer
 import scala.util.matching.Regex
 
 import java.nio.file.{FileSystems, Paths}
 
+@assumeSafe
 object FileOps:
   private def grepEntry(entry: FileEntry^, regex: Regex): List[GrepMatch] =
     val matches = ListBuffer[GrepMatch]()

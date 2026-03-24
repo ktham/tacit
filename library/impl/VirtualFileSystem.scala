@@ -1,11 +1,13 @@
 package tacit.library
 
 import language.experimental.captureChecking
+import caps.assumeSafe
 
 import scala.collection.concurrent.TrieMap
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Path, Paths}
 
+@assumeSafe
 class VirtualFileSystem(
   val root: Path,
   check: String -> Boolean = _ => true,

@@ -4,6 +4,9 @@ import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 
+import caps.assumeSafe
+
+@assumeSafe
 class LlmOps(config: Option[LlmConfig]):
 
   private lazy val client: OpenAIClient =

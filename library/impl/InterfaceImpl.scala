@@ -1,9 +1,11 @@
 package tacit.library
 
 import language.experimental.captureChecking
+import caps.assumeSafe
 
 import java.nio.file.Path
 
+@assumeSafe
 class InterfaceImpl(
   private val createFS: (String, String -> Boolean, Set[Path]) => FileSystem^,
   private val strictMode: Boolean = false,

@@ -1,7 +1,9 @@
 package tacit.library
 
 import language.experimental.captureChecking
+import caps.assumeSafe
 
+@assumeSafe
 private[library] final class ClassifiedImpl[+T](private[library] val value: T) extends Classified[T]:
   def map[B](op: T -> B): Classified[B] = ClassifiedImpl(op(value))
   def flatMap[B](op: T -> Classified[B]): Classified[B] = op(value)

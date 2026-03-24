@@ -1,9 +1,12 @@
 package tacit.library
 
+import caps.assumeSafe
+
 /** Validates commands against ProcessPermission rules.
  *
  *  This object contains the implementation details for command validation,
  *  including the list of file operation commands blocked in strict mode. */
+@assumeSafe
 object CommandValidator:
 
   /** Commands that perform file operations - blocked in strict mode */

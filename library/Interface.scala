@@ -1,6 +1,7 @@
 package tacit.library
 
 import language.experimental.captureChecking
+import caps.assumeSafe
 
 // ─── Classified Data ────────────────────────────────────────────────────────
 
@@ -9,6 +10,7 @@ import language.experimental.captureChecking
  *  - `toString` never reveals the underlying value (prints `Classified(****)`)
  *  - `map`/`flatMap` only accept **pure** functions, preventing side-channel leaks
  */
+@assumeSafe
 trait Classified[+T]:
   def map[B](op: T -> B): Classified[B]
   def flatMap[B](op: T -> Classified[B]): Classified[B]
@@ -17,6 +19,7 @@ trait Classified[+T]:
 
 /** Handle to a file or directory, obtained via `access(path)` inside a
  *  `requestFileSystem` block. Cannot escape the block scope. */
+@assumeSafe
 abstract class FileEntry(tracked val origin: FileSystem):
   def path: String
   def name: String
@@ -47,21 +50,25 @@ abstract class FileEntry(tracked val origin: FileSystem):
 
 /** Capability granting access to a file-system subtree.
  *  Obtained via `requestFileSystem(root)`. */
+@assumeSafe
 abstract class FileSystem extends caps.SharedCapability:
   def access(path: String): FileEntry^{this}
 
 // ─── Data Types ─────────────────────────────────────────────────────────────
 
 /** A single match returned by `grep` or `grepRecursive`. */
+@assumeSafe
 case class GrepMatch(file: String, lineNumber: Int, line: String)
 
 /** The result of running a process via `exec`. */
+@assumeSafe
 case class ProcessResult(exitCode: Int, stdout: String, stderr: String)
 
 // ─── Capabilities ───────────────────────────────────────────────────────────
 
 /** Capability granting access to a set of network hosts.
  *  Obtained via `requestNetwork(hosts)`. */
+@assumeSafe
 class Network(val allowedHosts: Set[String]) extends caps.SharedCapability:
   def validateHost(host: String): Unit =
     if !allowedHosts.contains(host) then
@@ -72,6 +79,7 @@ class Network(val allowedHosts: Set[String]) extends caps.SharedCapability:
 /** Capability granting permission to run a set of commands.
  *  Obtained via `requestExecPermission(commands)`.
  *  In strict mode, file-operation commands (cat, ls, rm, ...) are also blocked. */
+@assumeSafe
 class ProcessPermission(
   val allowedCommands: Set[String],
   val strictMode: Boolean = false
@@ -79,6 +87,7 @@ class ProcessPermission(
 
 /** Capability gating access to standard output (`println`, `print`, `printf`).
  *  An implicit instance is available at the REPL top level. */
+@assumeSafe
 class IOCapability private extends caps.SharedCapability
 
 // ─── Interface ──────────────────────────────────────────────────────────────
@@ -117,6 +126,7 @@ class IOCapability private extends caps.SharedCapability
  *  }
  *  ```
  */
+@assumeSafe
 trait Interface:
 
   val iocap: IOCapability

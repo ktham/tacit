@@ -1,10 +1,12 @@
 package tacit.library
 
 import language.experimental.captureChecking
+import caps.assumeSafe
 
 import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters.*
 
+@assumeSafe
 object ProcessOps:
   /** Drains an input stream into a string on the current thread. */
   private def drainStream(stream: java.io.InputStream): String =

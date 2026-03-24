@@ -1,10 +1,12 @@
 package tacit.library
 
 import language.experimental.captureChecking
+import caps.assumeSafe
 
 import java.net.{URI, HttpURLConnection}
 import java.nio.charset.StandardCharsets
 
+@assumeSafe
 object WebOps:
   private val TimeoutMs = 10000
 

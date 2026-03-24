@@ -1,6 +1,7 @@
 package tacit.library
 
 import language.experimental.captureChecking
+import caps.assumeSafe
 
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters.*
@@ -9,6 +10,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, FileVisitResult, Path, Paths, SimpleFileVisitor}
 import java.nio.file.attribute.BasicFileAttributes
 
+@assumeSafe
 class RealFileSystem(
   val root: Path,
   check: String -> Boolean = _ => true,
