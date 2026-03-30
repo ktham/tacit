@@ -84,6 +84,10 @@ class VirtualFileSystem(
       files.remove(resolved)
       ()
 
+    def mkdir(): Unit =
+      ensureParentDirs(resolved)
+      directories(resolved) = ()
+
     def exists: Boolean =
       files.contains(resolved) || directories.contains(resolved)
 

@@ -93,6 +93,10 @@ class RealFileSystem(
       requireNotClassified(jpath, "delete")
       Files.delete(jpath)
 
+    def mkdir(): Unit =
+      Files.createDirectories(jpath)
+      ()
+
     def exists: Boolean = Files.exists(jpath)
     def isDirectory: Boolean = Files.isDirectory(jpath)
     def size: Long = Files.size(jpath)

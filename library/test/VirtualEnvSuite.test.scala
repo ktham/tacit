@@ -8,7 +8,10 @@ import java.nio.file.{Files, Path}
 
 class VirtualEnvSuite extends munit.FunSuite:
 
-  val interface: Interface = new InterfaceImpl((root, check, classified) => new VirtualFileSystem(Path.of(root), check, classifiedPaths = classified)).unsafeAssumePure
+  val interface: Interface^{} = new InterfaceImpl() {
+    def createFS(root: String, filter: String -> Boolean, classifiedPaths: Set[Path]): FileSystem =
+      new VirtualFileSystem(Path.of(root), filter, classifiedPaths = classifiedPaths)
+  }.unsafeAssumePure
 
   import interface.*
 
@@ -168,6 +171,33 @@ class VirtualEnvSuite extends munit.FunSuite:
       file.write("original")
       file.write("replaced")
       assertEquals(file.read(), "replaced")
+    }
+
+  test("virtual: mkdir creates directory and parents"):
+    requestFileSystem("/virtual") {
+      val dir = access("/virtual/a/b/c")
+      assert(!dir.exists)
+      dir.mkdir()
+      assert(dir.exists)
+      assert(dir.isDirectory)
+      assert(access("/virtual/a").isDirectory)
+      assert(access("/virtual/a/b").isDirectory)
+    }
+
+  test("virtual: mkdir on existing directory is idempotent"):
+    requestFileSystem("/virtual") {
+      val dir = access("/virtual/existing")
+      dir.mkdir()
+      dir.mkdir() // should not throw
+      assert(dir.isDirectory)
+    }
+
+  test("virtual: mkdir then write file inside"):
+    requestFileSystem("/virtual") {
+      access("/virtual/newdir").mkdir()
+      val file = access("/virtual/newdir/file.txt")
+      file.write("hello")
+      assertEquals(file.read(), "hello")
     }
 
   test("virtual: path traversal with .. is blocked"):

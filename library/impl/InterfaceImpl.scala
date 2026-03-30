@@ -1,17 +1,19 @@
 package tacit.library
 
 import language.experimental.captureChecking
-import caps.assumeSafe
+import caps.*
 
 import java.nio.file.Path
 
 @assumeSafe
-class InterfaceImpl(
-  private val createFS: (String, String -> Boolean, Set[Path]) => FileSystem^,
+abstract class InterfaceImpl(
   private val strictMode: Boolean = false,
   private val classifiedPaths: Set[Path] = Set.empty,
   private val llmConfig: Option[LlmConfig] = None
 ) extends Interface:
+
+  protected def createFS(root: String, filter: String -> Boolean, classifiedPaths: Set[Path]): FileSystem
+
   export FileOps.*
   export ProcessOps.*
   export WebOps.*

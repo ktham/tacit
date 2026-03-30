@@ -15,7 +15,10 @@ class LibrarySuite extends munit.FunSuite:
   override def beforeEach(context: BeforeEach): Unit =
     tmpDir = Files.createTempDirectory("sandbox-test")
 
-  private val interface: Interface = new InterfaceImpl( (root, check, classified) => new RealFileSystem(Path.of(root), check, classified) ).unsafeAssumePure
+  private val interface: Interface^{} = new InterfaceImpl() {
+    def createFS(root: String, filter: String -> Boolean, classifiedPaths: Set[Path]): FileSystem =
+      new RealFileSystem(Path.of(root), filter, classifiedPaths)
+  }.unsafeAssumePure
 
   import interface.*
 
@@ -24,7 +27,7 @@ class LibrarySuite extends munit.FunSuite:
   override def afterEach(context: AfterEach): Unit =
     if Files.exists(tmpDir) then
       Files.walk(tmpDir).iterator().asScala.toList
-        .sortBy(_.toString)(Ordering[String].reverse)
+        .sortBy(_.toString)(using Ordering[String].reverse)
         .foreach(p => Files.deleteIfExists(p))
 
   test("read/write file round-trip within allowed root") {
@@ -168,10 +171,12 @@ class LibrarySuite extends munit.FunSuite:
     val secretDir = tmpDir.resolve("secret")
     Files.createDirectories(secretDir)
     val classifiedInterface: Interface^ = new InterfaceImpl(
-      (root, check, classified) => new RealFileSystem(Path.of(root), check, classified),
       false,
       Set(secretDir)
-    )
+    ) {
+      def createFS(root: String, filter: String -> Boolean, classifiedPaths: Set[Path]): FileSystem =
+        new RealFileSystem(Path.of(root), filter, classifiedPaths)
+    }
     import classifiedInterface.*
 
     requestFileSystem(tmpDir.toString) {
@@ -194,6 +199,27 @@ class LibrarySuite extends munit.FunSuite:
 
       // readClassified on non-classified throws
       intercept[SecurityException] { pub.readClassified() }
+    }
+  }
+
+  test("mkdir creates directory and parent directories") {
+    requestFileSystem(tmpDir.toString) {
+      val dir = access(tmpDir.resolve("a/b/c").toString)
+      assert(!dir.exists)
+      dir.mkdir()
+      assert(dir.exists)
+      assert(dir.isDirectory)
+      assert(access(tmpDir.resolve("a").toString).isDirectory)
+      assert(access(tmpDir.resolve("a/b").toString).isDirectory)
+    }
+  }
+
+  test("mkdir on existing directory is idempotent") {
+    requestFileSystem(tmpDir.toString) {
+      val dir = access(tmpDir.resolve("existing").toString)
+      dir.mkdir()
+      dir.mkdir() // should not throw
+      assert(dir.isDirectory)
     }
   }
 

@@ -28,7 +28,6 @@ object ScalaExecutor:
     */
   private[executor] def replClasspathArgs(using Context): Array[String] =
     val classpath = JFile(ctx.config.libraryJarPath).getAbsolutePath
-
     Array(
       "-classpath", classpath,
       "-color:never",
@@ -36,6 +35,7 @@ object ScalaExecutor:
       "-feature",
       "-unchecked",
       "-Yexplicit-nulls",
+      "-Ycheck-all-patmat",
       "-Wsafe-init",
       "-language:experimental.captureChecking",
       "-language:experimental.modularity"
@@ -65,14 +65,17 @@ object ScalaExecutor:
       case None => "None"
       case Some(llm) => s"""Some(LlmConfig("${esc(llm.baseUrl)}", "${esc(llm.apiKey)}", "${esc(llm.model)}"))"""
     s"""|import tacit.library.*
+        |import caps.*
         |val api: Interface^ = new InterfaceImpl(
-        |  (root, check, classified) => new RealFileSystem(java.nio.file.Path.of(root), check, classified),
         |  ${cfg.strictMode},
         |  $classifiedExpr,
         |  $llmConfigExpr
-        |)
+        |) {
+        |  def createFS(root: String, filter: String -> Boolean, classifiedPaths: Set[java.nio.file.Path]): FileSystem =
+        |    new RealFileSystem(java.nio.file.Path.of(root), filter, classifiedPaths)
+        |}
         |import api.*
-        |given IOCapability = iocap
+        |@assumeSafe given IOCapability = iocap
         |""".stripMargin
 
   /** Wraps user code in a `def run() = ...; run()` block to avoid capture checking REPL errors. */
@@ -129,6 +132,7 @@ object ScalaExecutor:
       val printStream = new PrintStream(outputCapture, true, StandardCharsets.UTF_8)
       val driver = new ReplDriver(replClasspathArgs, printStream, Some(sandboxedClassLoader))
       var state = driver.run(libraryPreamble)(using driver.initialState)
+      // state = driver.run("import language.experimental.safe")(using state)
       withOutputCapture(outputCapture, printStream):
         state = driver.run(wrapCode(code, ctx.config.wrappedCode))(using state)
 end ScalaExecutor

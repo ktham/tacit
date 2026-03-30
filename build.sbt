@@ -13,6 +13,7 @@ val scala3Version = {
     fallback
   }
 }
+// val scala3Version = "3.8.4-RC1-bin-SNAPSHOT"
 ThisBuild / resolvers += Resolver.scalaNightlyRepository
 
 lazy val lib = project
@@ -26,7 +27,7 @@ lazy val lib = project
     ),
     Compile / unmanagedSources / excludeFilter :=
       "*.test.scala" || "project.scala" || "README.md",
-    libraryDependencies += "com.openai" % "openai-java" % "4.29.1",
+    libraryDependencies += "com.openai" % "openai-java" % "4.30.0",
     scalacOptions ++= Seq(
       "-language:experimental.captureChecking",
       // "-language:experimental.separationChecking",

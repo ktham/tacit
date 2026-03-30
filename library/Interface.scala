@@ -1,7 +1,7 @@
 package tacit.library
 
 import language.experimental.captureChecking
-import caps.assumeSafe
+import caps.*
 
 // ─── Classified Data ────────────────────────────────────────────────────────
 
@@ -35,6 +35,8 @@ abstract class FileEntry(tracked val origin: FileSystem):
    *  The callback receives the line content and its 1-based line number. */
   def forEachLine(op: (String, Int) => Unit): Unit
   def delete(): Unit
+  /** Create this path as a directory, including any missing parent directories. */
+  def mkdir(): Unit
   /** List immediate children of a directory. */
   def children: List[FileEntry^{this}]
   /** Recursively list all descendants (files and subdirectories). */
@@ -127,7 +129,7 @@ class IOCapability private extends caps.SharedCapability
  *  ```
  */
 @assumeSafe
-trait Interface:
+trait Interface extends SharedCapability:
 
   val iocap: IOCapability
 

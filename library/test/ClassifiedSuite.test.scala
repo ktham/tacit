@@ -34,11 +34,13 @@ class ClassifiedSuite extends munit.FunSuite:
 
   val classifiedDir = Path.of("/virtual/secret").toAbsolutePath.normalize
 
-  val interface: Interface = new InterfaceImpl(
-    (root, check, classified) => new VirtualFileSystem(Path.of(root), check, classifiedPaths = classified),
+  val interface: Interface^{} = new InterfaceImpl(
     false,
     Set(classifiedDir)
-  ).unsafeAssumePure
+  ) {
+    def createFS(root: String, filter: String -> Boolean, classifiedPaths: Set[Path]): FileSystem =
+      new VirtualFileSystem(Path.of(root), filter, classifiedPaths = classifiedPaths)
+  }.unsafeAssumePure
 
   import interface.*
 
